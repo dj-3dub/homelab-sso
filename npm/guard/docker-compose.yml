@@ -1,0 +1,14 @@
+services:
+  guard:
+    image: nginx:alpine
+    container_name: npm-guard
+    restart: unless-stopped
+    ports:
+      - "3000:3000"   # change if 3000 is occupied
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3000/ || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
