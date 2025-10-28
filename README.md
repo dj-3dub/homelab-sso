@@ -1,13 +1,12 @@
-cat README.md 
 # Homelab SSO — Authentik + Nginx Proxy Manager + Internal CA
 
 [![Status](https://img.shields.io/badge/status-active-success)]()
-[![Made with ♥ in Chicago](https://img.shields.io/badge/Made%20with%20%E2%99%A5-Chicago-blue)]()
+[![Made with ❤️ in Chicago](https://img.shields.io/badge/Made%20with%20%E2%9D%A4-Chicago-blue)]()
 [![Authentik](https://img.shields.io/badge/IdP-Authentik-6C5CE7)]()
 [![NPM](https://img.shields.io/badge/Reverse%20Proxy-Nginx%20Proxy%20Manager-0A84FF)]()
 [![License](https://img.shields.io/badge/license-MIT-green)]()
 
-> LAN-only Single Sign-On for homelab services using **Authentik** (IdP), **Nginx Proxy Manager** (entry), **ForwardAuth** (guard), **Pi-hole** (DNS), and an **internal CA** for TLS that actually matches the internal topology.
+> LAN-only Single Sign-On for homelab services using **Authentik**, **Nginx Proxy Manager**, **ForwardAuth**, **Pi-hole**, and a custom **internal CA** for TLS trust inside a private `.lab` and `.pizza` network.
 
 ![Architecture](architecture/sso-overview.png)
 
@@ -15,137 +14,173 @@ cat README.md
 
 ## 🚀 Elevator Pitch
 
-This project turns a typical homelab into a **cohesive, secure SSO platform**:
-- **Authentik** at `https://saml.lab` (192.168.2.65) is the central IdP.
-- **NPM** at `https://npm.pizza` (192.168.2.51) is the managed entry point.
-- A tiny **ForwardAuth** guard enforces authentication on NPM’s admin surface.
-- An **internal CA** issues certs for `*.pizza` **and** `npm.pizza` (SAN).
-- **Pi-hole** provides internal DNS for `.pizza` and `.lab`.
+This project transforms a typical homelab into a cohesive, secure identity platform — mirroring enterprise-grade SSO patterns inside a local environment.
 
-All of it works **entirely on LAN**, ready for portfolio screenshots & demos.
+- **Authentik** (`https://saml.lab` @ 192.168.2.65) — Central IdP  
+- **Nginx Proxy Manager (NPM)** (`https://npm.pizza` @ 192.168.2.51) — Entry point  
+- **ForwardAuth Guard** — Protects NPM admin via Authentik login  
+- **Internal CA** — Wildcard certificates for `*.pizza` and `npm.pizza`  
+- **Pi-hole** — DNS for `.pizza` and `.lab` domains  
 
----
-
-## 🎯 Why I built this (the “why” behind the work)
-
-I wanted to show that I can design and implement **secure identity flows** end-to-end in a real environment:
-- **SSO practicality**: replace “click-a-link on each box” with a central IdP.
-- **TLS the right way**: internal CA + SANs that fit the *actual* hostnames.
-- **Reverse proxy hardening**: put admin planes behind authentication.
-- **DNS correctness**: trusted names for both human use and scripts.
-- **Repeatability**: documented, scriptable, and minimal moving parts.
-
-This is what I do professionally—**design defensible, reproducible infrastructure**—and I wanted that reflected in my homelab portfolio.
+Everything runs **on-prem**, **SSL-secured**, and **documented for reproducibility**.
 
 ---
 
-## 📚 What I learned (and solved)
+## 🎯 Why I Built This
 
-- **SANs matter**: A wildcard `*.pizza` isn’t enough—**add `npm.pizza`** to SANs or cURL/browsers will complain.  
-- **Trust chains**: Build a chain that clients can trust (Root → Leaf); install the root CA on workstations/servers.  
-- **Pi-hole + systemd-resolved**: Know who’s listening on **:53** and avoid collisions with containers.  
-- **ForwardAuth with Authentik**: Use `auth_request` to gate NPM Admin and pass identity headers upstream.  
-- **Outpost endpoints**: Authentik’s nginx outpost provides **`/auth/nginx`** and **`/start?rd=…`**—super handy.  
-- **Debugging TLS live**: I built a tiny Go tool (`tools/certpeek`) to read the live chain, SANs, and issuer from any host.  
-- **Docker/Nginx gotchas**: Don’t bind to a port another container already owns (e.g., 8081 with Nextcloud).  
-- **“Too many SSH keys”**: When automating, use `IdentitiesOnly yes` to avoid auth failures on first connect.
+I wanted to recreate the same identity and trust challenges found in enterprise infrastructure — but within a self-contained homelab.  
+This project taught me how **SSO, DNS, and certificates intersect** in real-world production environments.
+
+Goals:
+
+- ✅ Build a secure federated SSO environment  
+- ✅ Automate internal certificate management  
+- ✅ Strengthen my understanding of PKI and DNS resolution  
+- ✅ Showcase advanced homelab engineering for portfolio and recruiters  
 
 ---
 
 ## 🧩 Components
 
 | Layer | What | Why |
-|------|------|-----|
-| **IdP** | Authentik (`saml.lab`) | Central identity, SSO/OIDC/SAML |
-| **Entry** | Nginx Proxy Manager (`npm.pizza`) | Simple TLS + routing with UI |
-| **Guard** | nginx ForwardAuth | Enforces Auth prior to admin access |
-| **DNS** | Pi-hole | `.pizza` + `.lab` resolution on LAN |
-| **PKI** | Internal CA | Trust and SANs that match internal hosts |
+|-------|------|-----|
+| **IdP** | Authentik (`saml.lab`) | Central authentication (SAML/OIDC) |
+| **Reverse Proxy** | NPM (`npm.pizza`) | Unified web entry point |
+| **Guard** | ForwardAuth | Enforces SSO before access |
+| **DNS** | Pi-hole | Local resolver for `.pizza` and `.lab` |
+| **PKI** | Internal Root CA | Issues leaf certs with SANs |
 
 ---
 
-## 🛠️ Quick start (for reviewers)
+## ⚙️ Architecture Overview
 
-> This repo contains **examples** (no secrets). Replace placeholders and adapt to your environment.
+```plaintext
+[ Client ]
+   │
+   ▼
+[ Nginx Proxy Manager ] (https://npm.pizza)
+   │
+   ├──> Reverse proxy to backend services
+   │
+   └──> ForwardAuth → [ Authentik Guard ] → [ Authentik IdP (saml.lab) ]
+                                     │
+                                     └──> Redis + Postgres (tokens, sessions)
+```
 
-1) **NPM compose** (with `/ssl` mount):  
+---
+
+## 🛠️ Quick Start (for reviewers)
+
+This repo contains **examples** (no secrets). Replace placeholders and adapt to your environment.
+
+### 1️⃣ NPM Compose (with /ssl mount)
 `npm/docker-compose.yml.example`
 
-2) **ForwardAuth guard** on `:3000`:  
-`npm/guard/docker-compose.yml.example` + `npm/guard/nginx.conf.example`
+### 2️⃣ ForwardAuth Guard on :3000
+`npm/guard/docker-compose.yml.example`  
+`npm/guard/nginx.conf.example`
 
-3) **Authentik stack**:  
-`authentik/docker-compose.yml.example` (Postgres + Redis + Server + Worker)
+### 3️⃣ Authentik Stack
+`authentik/docker-compose.yml.example`  
+Includes Postgres + Redis + Server + Worker.
 
-4) **DNS overrides** (Pi-hole):  
-npm.pizza -> 192.168.2.51
-saml.lab -> 192.168.2.65
+### 4️⃣ DNS Overrides (Pi-hole)
+```
+npm.pizza → 192.168.2.51
+saml.lab  → 192.168.2.65
+```
 
-markdown
-Copy code
+### 5️⃣ Cert Requirements
+Leaf cert **must include SANs**:
+```
+DNS: *.pizza
+DNS: npm.pizza
+```
 
-5) **Cert requirement**:  
-Leaf cert **must** include **SANs**:  
-- `DNS:*.pizza`  
-- `DNS:npm.pizza`
-
-6) **Smoke tests**:
+### 6️⃣ Smoke Tests
 ```bash
-# From NPM host (guard should redirect to start):
+# From NPM host (guard redirect test)
 curl -I http://127.0.0.1:3000/ -H 'Host: npm.pizza'
 
-# From any client (with CA installed):
+# From any client (with CA installed)
 curl -I https://npm.pizza
 # Expect: 302 Location: https://saml.lab/outpost.goauthentik.io/start?rd=...
-🔐 TLS, SANs, and CA (internal)
-Root CA lives on NPM host and signs a leaf for *.pizza + npm.pizza.
+```
 
-Clients install the Root CA:
+---
 
-Ubuntu: copy to /usr/local/share/ca-certificates/ + sudo update-ca-certificates.
+## 🔐 TLS, SANs, and Internal CA
 
-Windows: import into Trusted Root Certification Authorities.
+Root CA lives on the NPM host and signs a leaf for `*.pizza` + `npm.pizza`.
 
-Live verification:
+### Client Trust Setup
 
-bash
-Copy code
-# Inspect live chain and SANs (tool included in repo)
-cd tools/certpeek && go mod tidy && go build -o certpeek
+**Ubuntu**
+```bash
+sudo cp rootCA.crt.pem /usr/local/share/ca-certificates/
+sudo update-ca-certificates
+```
+
+**Windows**
+- Import `rootCA.crt.pem` into *Trusted Root Certification Authorities*.
+
+### Live Verification
+```bash
+cd tools/certpeek
+go mod tidy && go build -o certpeek
 ./certpeek npm.pizza:443
-🔒 ForwardAuth concept (Nginx + Authentik)
-NPM forwards to 127.0.0.1:3000.
+```
 
-Guard protects / with auth_request /ak_auth.
+---
 
-Unauthed → 401 → error_page → redirect to Authentik /start?rd=....
+## 🔒 ForwardAuth Concept (Nginx + Authentik)
 
-After login, Authentik redirects back to original URL; guard allows.
+- NPM forwards unauthenticated requests to `127.0.0.1:3000`.  
+- Guard applies `auth_request /ak_auth`.  
+- If unauthenticated → 401 → redirects to Authentik `/start?rd=...`.  
+- After login, Authentik redirects user back → guard allows access.
 
-See npm/guard/nginx.conf.example.
+See `npm/guard/nginx.conf.example` for reference.
 
-🧪 Troubleshooting
-“self-signed in chain”
-→ install the Root CA on your client.
+---
 
-“no alternative certificate subject name matches 'npm.pizza'”
-→ reissue leaf cert with SANs *.pizza and npm.pizza; reattach in NPM.
+## 🧪 Troubleshooting
 
-Port already in use
-→ sudo ss -tulpn | grep :3000 (or whichever port); stop/rebind conflicting service.
+| Symptom | Fix |
+|----------|-----|
+| **"self-signed in certificate chain"** | Install internal CA on the client |
+| **"no alternative certificate subject name matches 'npm.pizza'"** | Reissue cert with SANs `*.pizza`, `npm.pizza` |
+| **"Port already in use"** | `sudo ss -tulpn | grep :3000` — stop conflicting process |
+| **"Failed to connect to saml.lab"** | Ensure both `.51` and `.65` use Pi-hole for DNS |
 
-More in docs/troubleshooting.md.
+More fixes → `docs/troubleshooting.md`
 
-🗺️ Roadmap
- Authentik group-based access to NPM Admin (Admins only)
+---
 
- mTLS between Guard ↔ Authentik for defense in depth
+## 🗺️ Roadmap
 
- GitHub Action to auto-render Graphviz .dot → .png
+- [ ] Authentik group-based access for NPM Admin  
+- [ ] mTLS between Guard ↔ Authentik  
+- [ ] GitHub Action: auto-render `.dot` → `.png`  
+- [ ] Add screenshots (`login`, `NPM UI`, `auth flow`)  
+- [ ] Extend SSO to Grafana, Nextcloud, Portainer, Heimdall  
 
- Add screenshots/ (login, post-auth, NPM UI)
+---
 
- Extend SSO to Grafana, Nextcloud, Portainer, Heimdall
+## 🧠 Lessons Learned
+
+This project became a crash course in **identity, trust, and visibility**.
+
+**Key takeaways:**
+- 🔄 DNS configuration consistency is everything.  
+- 🔐 TLS trust fails silently if SANs don’t match reality.  
+- 🧩 SSO success depends on multiple systems agreeing on session state.  
+- 🛠️ Debugging is easier when you can *see* cert chains and network flows.  
+- 🚀 Automation matters — but so does documentation.
+
+> 💬 “Good infrastructure is invisible — until you try to remove it.”
+
+---
 
 ## 🙌 Credits
 
@@ -153,9 +188,10 @@ Built with ❤️ by **Tim Heverin**.
 
 Thanks to the open-source community — especially the **Authentik**, **Nginx Proxy Manager**, and **Pi-hole** teams — for their incredible work and documentation that made this integration possible.  
 
-Special thanks to the **PowerShell, Go, and DevOps** communities for sharing ideas, patterns, and best practices that inspired much of this project.  
+Special thanks to the **PowerShell**, **Go**, and **DevOps** communities for shared patterns and inspiration.  
 
-This project reflects not just the tooling, but the mindset — **automate everything, document everything, and learn from everything**.
+This project reflects not just the tooling, but the mindset —  
+**automate everything, document everything, and learn from everything.**
 
 ---
 
