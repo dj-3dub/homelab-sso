@@ -1,0 +1,23 @@
+# OS
+.DS_Store
+Thumbs.db
+
+# Go
+**/bin/
+**/dist/
+**/go.sum
+
+# Docker runtime/state
+**/.env
+**/data/
+**/mysql/
+**/ssl/
+**/media/
+**/certs/
+**/letsencrypt/
+
+# Secrets (do not commit real keys)
+**/*.key
+**/*.pem
+**/*.pfx
+**/*.jks

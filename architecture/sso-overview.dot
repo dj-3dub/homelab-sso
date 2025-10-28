@@ -1,0 +1,27 @@
+digraph G {
+  graph [rankdir=LR, fontsize=10, fontname="Arial", pad="0.3", nodesep="0.5", ranksep="0.8"];
+  node  [shape=box, style="rounded,filled", fillcolor="#eef2f7", color="#334155", fontname="Arial", fontsize=10, margin="0.25,0.18"];
+  edge  [color="#6b7280", fontname="Arial", fontsize=9];
+
+  subgraph cluster_client {
+    label="Client (LAN)"; labelloc="t"; fontsize=12; style="rounded,dashed"; color="#93c5fd";
+    Browser [label="Browser\nhttps://npm.pizza"];
+  }
+
+  subgraph cluster_npm {
+    label="NPM Host (.51)"; labelloc="t"; fontsize=12; style="rounded,dashed"; color="#86efac";
+    NPM   [label="Nginx Proxy Manager\n:443 (wildcard *.pizza + SAN npm.pizza)"];
+    Guard [label="ForwardAuth Guard (nginx)\n:3000"];
+  }
+
+  subgraph cluster_idp {
+    label="Authentik VM (.65)"; labelloc="t"; fontsize=12; style="rounded,dashed"; color="#fca5a5";
+    AK [label="Authentik IdP\nhttps://saml.lab"];
+  }
+
+  Browser -> NPM   [label="TLS 443"];
+  NPM     -> Guard [label="Forward → 127.0.0.1:3000"];
+  Guard   -> AK    [label="auth_request /ak_auth (TLS)"];
+  AK      -> Browser [label="Login + callback\nrd=https://npm.pizza/..."];
+  Guard   -> NPM   [label="200/401 + headers"];
+}
